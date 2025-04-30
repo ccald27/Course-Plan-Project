@@ -67,6 +67,14 @@ CREATE TABLE student_courses (
   taken BOOLEAN DEFAULT false
 );
 
+DROP TABLE IF EXISTS users;
+CREATE TABLE users (
+  username VARCHAR(50) PRIMARY KEY,
+  password VARCHAR(60) NOT NULL,
+  first_name VARCHAR(60),
+  last_name VARCHAR(60)
+)
+
 
 
 

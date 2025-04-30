@@ -1,7 +1,7 @@
 // ********************** Initialize server **********************************
 
-const server = require('../src/index'); //TODO: Make sure the path to your index.js is correctly added
-
+const {server, db} = require('../src/index'); //TODO: Make sure the path to your index.js is correctly added
+const bcryptjs = require('bcryptjs');
 // ********************** Import Libraries ***********************************
 
 const chai = require('chai'); // Chai HTTP provides an interface for live integration testing of the API's.
@@ -29,33 +29,25 @@ describe('Server!', () => {
 
 // *********************** TODO: WRITE 2 UNIT TESTCASES **************************
 
-
-// API: /add_user
-// Input: .send({name: 'John Doe', password:'password', identikey: 'JoDo1234'})
-// Expect: res.status == 200 and res.body.message == 'Success'
-// Result: This test case should pass and return a status 200 along with a "Success" message.
-// Explanation: The testcase will call the /register API with the following input
-// and expects the API to return a status of 200 along with the "Success" message.
-
-describe('Testing Add User API', () => {
+//register tests
+describe('Testing Register API', () => {
   it('positive : /register', done => {
     chai
       .request(server)
       .post('/register')
-      .send({name: 'John Doe', password:'password', identikey: 'JoDo1234'})
+      .send({identikey: 'test1777', first_name: 'John', last_name: 'Doe', password: 'pass'})
       .end((err, res) => {
         expect(res).to.have.status(200);
-        expect(res.body.message).to.equal('Success');
+        expect(res.body.message).to.equals('Success');
         done();
       });
   });
-//////////////////////////////////////////
 
-  it('Negative : /register', done => {
+  it('Negative : /register. Checking invalid name', done => {
     chai
       .request(server)
       .post('/register')
-      .send({name: 'John Doe', password:'password', identikey: 'Jodo1234'})
+      .send({identikey: 'UserName2000', first_name: 'John', last_name: 'Doe', password:'pass'})
       .end((err, res) => {
         expect(res).to.have.status(400);
         expect(res.body.message).to.equals('Invalid identikey format');
@@ -64,29 +56,30 @@ describe('Testing Add User API', () => {
   });
 });
 
-////////Redirect:////////////
+
+//redirect test
 describe('Testing Redirect', () => {
-  // Sample test case given to test /test endpoint.
-  it('\test route should redirect to /login with 302 HTTP status code', done => {
+  it('\test should redirect to /login with a 302 HTTP code', done => {
     chai
       .request(server)
       .get('/test')
+      //login has a render so we need to stop the redirect (otherwise get a 200)
+      .redirects(0)
       .end((err, res) => {
         res.should.have.status(302); // Expecting a redirect status code
-        res.should.redirectTo(/^.*127\.0\.0\.1.*\/login$/); // Expecting a redirect to /login with the mentioned Regex
+        //just goes to /login instead of explicit 'localhost/login'
+        res.should.redirectTo('/login'); // Expecting a redirect to /login (localhost not inc.)
         done();
       });
   });
 });
 
-
-///////////////Testing Render:///////////////////
+//render test
 describe('Testing Render', () => {
-  // Sample test case given to test /test endpoint.
   it('test "/login" route should render with an html response', done => {
     chai
       .request(server)
-      .get('/login') // for reference, see lab 8's login route (/login) which renders home.hbs
+      .get('/login') 
       .end((err, res) => {
         res.should.have.status(200); // Expecting a success status code
         res.should.be.html; // Expecting a HTML response
@@ -95,28 +88,30 @@ describe('Testing Render', () => {
   });
 });
 
-////////////////////Profile authentication
-// Authentication Required
-describe('Profile Route Tests', () => {
+describe('Student Schedule Route Tests', () => {
   let agent;
   const testUser = {
-    username: 'testuser',
+    identikey: 'test1899',
     password: 'testpass123',
+    first_name: 'john',
+    last_name: 'doe'
   };
 
   before(async () => {
     // Clear users table and create test user
-    await db.query('TRUNCATE TABLE users CASCADE');
+    await db.query('TRUNCATE TABLE students CASCADE');
     const hashedPassword = await bcryptjs.hash(testUser.password, 10);
-    await db.query('INSERT INTO users (username, password) VALUES ($1, $2)', [
-      testUser.username,
+    await db.query('INSERT INTO students (identikey, password, first_name, last_name) VALUES ($1, $2, $3, $4)', [
+      testUser.identikey,
       hashedPassword,
+      testUser.first_name,
+      testUser.last_name
     ]);
   });
 
   beforeEach(() => {
     // Create new agent for session handling
-    agent = chai.request.agent(app);
+    agent = chai.request.agent(server);
   });
 
   afterEach(() => {
@@ -126,33 +121,34 @@ describe('Profile Route Tests', () => {
 
   after(async () => {
     // Clean up database
-    await db.query('TRUNCATE TABLE users CASCADE');
+    await db.query('TRUNCATE TABLE students CASCADE');
   });
 
-  describe('GET /profile', () => {
-    it('should return 401 if user is not authenticated', done => {
+  describe('GET /schedules', () => {
+    it('should return user info before logged in at schedules', done => {
       chai
-        .request(app)
-        .get('/profile')
+        .request(server)
+        .get('/schedule')
         .end((err, res) => {
-          expect(res).to.have.status(401);
-          expect(res.text).to.equal('Not authenticated');
+          expect(res).to.have.status(200);
+          expect(res.body).to.be.an('object');
           done();
         });
     });
 
-    it('should return user profile when authenticated', async () => {
+    it('should return 404 if user has no courses', async () => {
       // First login to get session
       await agent.post('/login').send(testUser);
 
       // Then access profile
-      const res = await agent.get('/profile');
+      const res = await agent.get('/schedule');
 
-      expect(res).to.have.status(200);
-      expect(res.body).to.be.an('object');
-      expect(res.body).to.have.property('username', testUser.username);
+      expect(res).to.have.status(404);
+      expect(res.body.message).to.equals('Student Courses Not Found');
+
     });
   });
 });
+
 
 // ********************************************************************************

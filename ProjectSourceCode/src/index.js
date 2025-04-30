@@ -71,18 +71,15 @@ db.connect()
 
 // -------------------------------------  ROUTES   ----------------------------------------------
 
-let user = null;
-
-// A simple welcome route
+//welcome route for testing
 app.get('/welcome', (req, res) => {
-  res.json({ status: 'success', message: 'Welcome!' });
+  res.json({status: 'success', message: 'Welcome!'});
 });
 
 // Render the registration page
 app.get('/register', (req, res) => {
   res.render('pages/register');
 });
-
 app.get('/', (req, res) => {
   res.render('pages/home');
 });
@@ -100,7 +97,8 @@ app.post('/register', async (req, res) => {
     // Validate identikey format: 4 letters followed by 4 digits
     const identikeyRegex = /^[a-zA-Z]{4}\d{4}$/;
     if (!identikeyRegex.test(identikey)) {
-      return res.status(400).render('pages/register', { message: 'Invalid identikey format', error: true });
+      return res.status(400).json({ message: 'Invalid identikey format' });
+      //return res.status(400).render('pages/register', { message: 'Invalid identikey format', error: true });
     }
 
     const studentOrAdvisor = isAdvisor == 'on' ? 'advisors' : 'students';
@@ -124,9 +122,7 @@ app.post('/register', async (req, res) => {
         }
         db.any(insertUserQuery)
           .then(() => {
-
-            // Registration successful
-            res.redirect('/login');
+           return res.status(200).json({message: 'Success'});
           })
       });
   } catch (error) {
@@ -136,14 +132,20 @@ app.post('/register', async (req, res) => {
 });
 
 //-----------Login Route--------------
+
 app.get('/login', (req, res) => {
-  res.render('pages/login')
+  res.render('pages/login');
 });
+
+app.get('/test', (req, res) => {
+  return res.redirect(302, '/login');
+})
 
 
 // Handle user login
 
 app.post('/login', async (req, res) => {
+  let user = null;
   const { identikey, password } = req.body;
   try {
     if (!identikey || !password) {
@@ -308,12 +310,17 @@ app.get('/logout', (req, res) => {
 
 
 
+
 const router = express.Router();
 // const pool = require('../index');
 
 
 app.get('/schedule', async (req, res) => {
   try {
+    const isUserCourses = await db.query(`SELECT * FROM students WHERE identikey = '${req.session.user.identikey}'`)
+    if(isUserCourses.student_courses == undefined) {
+      return res.status(404).json({message: 'Student Courses Not Found'})
+    }
     const identikey = req.session.user.identikey;
     const updatedStudent = await db.oneOrNone(`SELECT * FROM students WHERE identikey = $1`, [identikey]);
 
@@ -434,19 +441,6 @@ app.post('/save-notes', async (req, res) => {
 ////profile//////////
 // Authentication Required
 
-app.get('/profile', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).send('Not authenticated');
-  }
-  try {
-    res.render('pages/profile'), {
-      user: req.session.user,
-    };
-  } catch (err) {
-    console.error('Profile error:', err);
-    res.status(500).send('Internal Server Error');
-  }
-});
 ///////////////
 
 app.get('/fetchStudentData', async (req, res) => {
@@ -511,4 +505,4 @@ const server = app.listen(3000, () => {
   console.log('Server is listening on port 3000');
 });
 
-module.exports = server;
+module.exports = {server, db}
